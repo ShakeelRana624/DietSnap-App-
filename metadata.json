@@ -1,0 +1,5 @@
+{
+  "name": "DietSnap",
+  "description": "A minimalist calorie tracker with real-time food scanning and health grading.",
+  "requestFramePermissions": ["camera"]
+}

@@ -1,0 +1,48 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Stores user's physical data and calorie goals.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "weight": { "type": "number", "description": "Weight in kg" },
+        "height": { "type": "number", "description": "Height in cm" },
+        "goal": { "type": "number", "description": "Daily calorie goal" },
+        "lastGoalUpdate": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "weight", "height", "goal"]
+    },
+    "MealLog": {
+      "title": "Meal Log",
+      "description": "Daily meal entries with nutrition data.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "foodName": { "type": "string" },
+        "calories": { "type": "number" },
+        "protein": { "type": "number" },
+        "carbs": { "type": "number" },
+        "fat": { "type": "number" },
+        "portion": { "type": "string", "enum": ["Small", "Medium", "Large"] },
+        "grade": { "type": "string", "enum": ["A", "B", "C", "D", "F"] },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "imageUrl": { "type": "string" }
+      },
+      "required": ["uid", "foodName", "calories", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile data"
+    },
+    "/users/{userId}/meals/{mealId}": {
+      "schema": "MealLog",
+      "description": "User's meal logs"
+    }
+  }
+}
