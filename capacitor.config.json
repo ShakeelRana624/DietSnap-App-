@@ -1,0 +1,6 @@
+{
+  "appId": "com.dietsnap.ai",
+  "appName": "DietSnap AI",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}

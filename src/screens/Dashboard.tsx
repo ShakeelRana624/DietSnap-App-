@@ -63,9 +63,9 @@ export default function Dashboard({ profile }: Props) {
   }, {});
 
   return (
-    <div className="min-h-screen bg-black pb-32">
+    <div className="min-h-screen bg-black pb-32 max-w-md mx-auto relative">
       {/* Header */}
-      <div className="p-6 flex justify-between items-center bg-gray-900/50 backdrop-blur-xl border-b border-gray-800 sticky top-0 z-20">
+      <div className="p-6 flex justify-between items-center bg-gray-900/50 backdrop-blur-xl border-b border-gray-800 sticky top-0 z-20 max-w-md mx-auto w-full left-0 right-0">
         <div>
           <h1 className="text-xl font-black italic">DIET<span className="text-[#00FF00]">SNAP</span></h1>
           <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">

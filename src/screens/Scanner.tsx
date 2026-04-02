@@ -189,7 +189,7 @@ export default function Scanner() {
               {adTimer}s
             </div>
             
-            <div className="space-y-8 max-w-sm">
+            <div className="space-y-8 max-w-sm mx-auto">
               <div className="w-24 h-24 bg-[#00FF00] rounded-[32px] flex items-center justify-center mx-auto shadow-[0_0_50px_rgba(0,255,0,0.3)] animate-bounce">
                 <Zap className="w-12 h-12 text-black fill-current" />
               </div>
@@ -226,12 +226,13 @@ export default function Scanner() {
           ref={videoRef} 
           autoPlay 
           playsInline 
-          className="w-full h-full object-cover"
+          muted
+          className="absolute inset-0 w-full h-full object-cover"
         />
         <canvas ref={canvasRef} className="hidden" />
 
         {/* Overlay UI */}
-        <div className="absolute inset-0 border-[40px] border-black/40 pointer-events-none">
+        <div className="absolute inset-0 border-[20px] sm:border-[40px] border-black/40 pointer-events-none">
           <div className="w-full h-full border-2 border-[#00FF00]/30 rounded-3xl relative">
             <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-[#00FF00] rounded-tl-xl"></div>
             <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-[#00FF00] rounded-tr-xl"></div>
@@ -289,7 +290,7 @@ export default function Scanner() {
             <motion.div 
               initial={{ y: 100 }}
               animate={{ y: 0 }}
-              className="w-full bg-gray-900 rounded-3xl p-8 space-y-6 border-t-4 border-[#00FF00]"
+              className="w-full max-w-md mx-auto bg-gray-900 rounded-3xl p-8 space-y-6 border-t-4 border-[#00FF00]"
             >
               <div className="text-center">
                 <h3 className="text-2xl font-black italic uppercase tracking-tight">Select Portion</h3>

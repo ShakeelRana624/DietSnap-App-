@@ -40,7 +40,7 @@ export default function ResultScreen() {
   };
 
   return (
-    <div className="min-h-screen bg-black p-6 flex flex-col">
+    <div className="min-h-screen bg-black p-6 flex flex-col max-w-md mx-auto">
       <div className="flex items-center gap-4 mb-8">
         <button onClick={() => navigate(-1)} className="p-2 bg-gray-900 rounded-xl">
           <ArrowLeft className="w-6 h-6" />
