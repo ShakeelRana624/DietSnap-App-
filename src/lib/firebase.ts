@@ -15,7 +15,7 @@ import {
 } from 'firebase/auth';
 import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, addDoc, query, where, getDocs, onSnapshot, orderBy } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { UserProfile, MealLog, WeightLog } from '../types';
+import { UserProfile, MealLog, WeightLog, WaterLog } from '../types';
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
@@ -153,6 +153,23 @@ export const logWeight = async (weightLog: WeightLog): Promise<void> => {
   } catch (error) {
     return handleFirestoreError(error, 'create', `users/${weightLog.uid}/weights`);
   }
+};
+
+export const logWater = async (waterLog: WaterLog): Promise<void> => {
+  try {
+    const userWaterRef = collection(db, 'users', waterLog.uid, 'water');
+    await addDoc(userWaterRef, waterLog);
+  } catch (error) {
+    return handleFirestoreError(error, 'create', `users/${waterLog.uid}/water`);
+  }
+};
+
+export const subscribeToWater = (uid: string, callback: (water: WaterLog[]) => void) => {
+  const q = query(collection(db, 'users', uid, 'water'), orderBy('timestamp', 'desc'));
+  return onSnapshot(q, (snapshot) => {
+    const water = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WaterLog));
+    callback(water);
+  });
 };
 
 export const subscribeToWeights = (uid: string, callback: (weights: WeightLog[]) => void) => {

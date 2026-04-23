@@ -30,7 +30,7 @@ service cloud.firestore {
     // 2. Validation Blueprints
     function isValidUser(data) {
       return data.keys().hasAll(['uid', 'email', 'weight', 'height', 'goal', 'createdAt'])
-        && data.keys().size() <= 20
+        && data.keys().size() <= 25
         && data.uid == request.auth.uid
         && data.email is string
         && data.weight is number
@@ -41,7 +41,7 @@ service cloud.firestore {
 
     function isValidMeal(data) {
       return data.keys().hasAll(['uid', 'foodName', 'calories', 'protein', 'carbs', 'fat', 'portion', 'grade', 'timestamp'])
-        && data.keys().size() <= 11
+        && data.keys().size() <= 12
         && data.uid == request.auth.uid
         && data.foodName is string && data.foodName.size() <= 200
         && data.calories is number
@@ -55,9 +55,17 @@ service cloud.firestore {
 
     function isValidWeight(data) {
       return data.keys().hasAll(['uid', 'weight', 'timestamp'])
-        && data.keys().size() == 3
+        && data.keys().size() <= 5
         && data.uid == request.auth.uid
         && data.weight is number && data.weight > 0
+        && data.timestamp is string;
+    }
+
+    function isValidWater(data) {
+      return data.keys().hasAll(['uid', 'amount', 'timestamp'])
+        && data.keys().size() <= 5
+        && data.uid == request.auth.uid
+        && data.amount is number && data.amount > 0
         && data.timestamp is string;
     }
 
@@ -70,8 +78,7 @@ service cloud.firestore {
         && incoming().createdAt == existing().createdAt;
       
       match /meals/{mealId} {
-        allow list: if isOwner(userId);
-        allow get: if isOwner(userId) && isValidId(mealId);
+        allow read: if isOwner(userId);
         allow create: if isOwner(userId) && isValidMeal(incoming()) && isValidId(mealId);
         allow update: if isOwner(userId) && isValidMeal(incoming()) && isValidId(mealId)
           && incoming().uid == existing().uid
@@ -80,9 +87,15 @@ service cloud.firestore {
       }
 
       match /weights/{weightId} {
-        allow list: if isOwner(userId);
+        allow read: if isOwner(userId);
         allow create: if isOwner(userId) && isValidWeight(incoming()) && isValidId(weightId);
         allow delete: if isOwner(userId) && isValidId(weightId);
+      }
+
+      match /water/{waterId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidWater(incoming()) && isValidId(waterId);
+        allow delete: if isOwner(userId) && isValidId(waterId);
       }
     }
   }

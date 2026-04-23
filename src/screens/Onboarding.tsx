@@ -106,6 +106,7 @@ export default function Onboarding({ onComplete }: Props) {
       activityLevel: formData.activityLevel,
       goalType: formData.goalType,
       goal: calculateGoal(),
+      waterTarget: 2000,
       streak: 0,
       lastGoalUpdate: new Date().toISOString(),
       createdAt: new Date().toISOString()

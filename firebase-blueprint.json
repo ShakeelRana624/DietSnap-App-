@@ -39,6 +39,17 @@
         "imageUrl": { "type": "string" }
       },
       "required": ["uid", "foodName", "calories", "protein", "carbs", "fat", "portion", "grade", "timestamp"]
+    },
+    "Water": {
+      "title": "Water Log",
+      "description": "Log of water intake by a user",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "amount": { "type": "number" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["uid", "amount", "timestamp"]
     }
   },
   "firestore": {
@@ -49,6 +60,10 @@
     "/users/{userId}/meals/{mealId}": {
       "schema": "Meal",
       "description": "Subcollection of meal logs for a specific user"
+    },
+    "/users/{userId}/water/{waterId}": {
+      "schema": "Water",
+      "description": "Subcollection of water intake logs"
     }
   }
 }

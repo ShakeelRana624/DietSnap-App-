@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { UserProfile, MealLog } from '../types';
+import { UserProfile, MealLog, WaterLog } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Camera, TrendingUp, Utensils, Flame, Calendar, History, Target, ArrowRight, User, Sparkles, Trophy } from 'lucide-react';
+import { Plus, Camera, TrendingUp, Utensils, Flame, Calendar, History, Target, ArrowRight, User, Sparkles, Trophy, Droplets } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { subscribeToMeals, saveUserProfile, subscribeToWeights, logWeight, updateStreak } from '../lib/firebase';
+import { subscribeToMeals, saveUserProfile, subscribeToWeights, logWeight, updateStreak, subscribeToWater, logWater } from '../lib/firebase';
 import { WeightLog } from '../types';
 import WeightTracker from '../components/WeightTracker';
+import WaterTracker from '../components/WaterTracker';
+import StreakCelebration from '../components/StreakCelebration';
 import CoachAdvice from '../components/CoachAdvice';
 import CalorieProgress from '../components/CalorieProgress';
 import { scheduleReminders } from '../services/notificationService';
@@ -18,7 +20,9 @@ interface Props {
 export default function Dashboard({ profile }: Props) {
   const [meals, setMeals] = useState<MealLog[]>([]);
   const [weights, setWeights] = useState<WeightLog[]>([]);
+  const [waterLogs, setWaterLogs] = useState<WaterLog[]>([]);
   const [showGoalModal, setShowGoalModal] = useState(false);
+  const [showStreakModal, setShowStreakModal] = useState(false);
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [newWeight, setNewWeight] = useState(profile.weight?.toString() || '0');
   const [newGoal, setNewGoal] = useState(profile.goal?.toString() || '2000');
@@ -33,7 +37,10 @@ export default function Dashboard({ profile }: Props) {
     const unsubWeights = subscribeToWeights(profile.uid, (fetchedWeights) => {
       setWeights(fetchedWeights);
     });
-    return () => { unsub(); unsubWeights(); };
+    const unsubWater = subscribeToWater(profile.uid, (fetchedWater) => {
+      setWaterLogs(fetchedWater);
+    });
+    return () => { unsub(); unsubWeights(); unsubWater(); };
   }, [profile.uid]);
 
   useEffect(() => {
@@ -46,6 +53,16 @@ export default function Dashboard({ profile }: Props) {
   useEffect(() => {
     updateStreak(profile);
     
+    // Check for streak milestone celebration
+    const milestones = [7, 14, 30, 50, 100, 365];
+    const lastMilestoneShown = localStorage.getItem(`dietsnap_milestone_${profile.uid}`);
+    if (profile.streak > 0 && milestones.includes(profile.streak) && lastMilestoneShown !== profile.streak.toString()) {
+      setShowStreakModal(true);
+      localStorage.setItem(`dietsnap_milestone_${profile.uid}`, profile.streak.toString());
+    }
+  }, [profile.streak, profile.uid]);
+
+  useEffect(() => {
     // Check for new day
     const today = new Date().toDateString();
     const lastUpdate = profile.lastGoalUpdate ? new Date(profile.lastGoalUpdate).toDateString() : null;
@@ -67,6 +84,19 @@ export default function Dashboard({ profile }: Props) {
       // Also update current profile weight
       await saveUserProfile({ ...profile, weight: w });
       setShowWeightModal(false);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAddWater = async (amount: number) => {
+    try {
+      await logWater({
+        id: Math.random().toString(36).substr(2, 9),
+        uid: profile.uid,
+        amount,
+        timestamp: new Date().toISOString()
+      });
     } catch (err) {
       console.error(err);
     }
@@ -118,10 +148,19 @@ export default function Dashboard({ profile }: Props) {
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-[#00FF00] font-black uppercase tracking-widest bg-[#00FF00]/10 px-2 rounded-full">Pro</span>
                 {profile.streak > 0 && (
-                  <div className="flex items-center gap-1 text-orange-500 font-black text-[10px] uppercase">
-                    <Flame className="w-3 h-3 fill-current" />
-                    {profile.streak} Day Streak
-                  </div>
+                  <motion.div 
+                    initial={{ scale: 0.8 }}
+                    animate={{ scale: [1, 1.1, 1] }}
+                    transition={{ repeat: Infinity, duration: 2 }}
+                    className={`flex items-center gap-1.5 transition-all text-xs uppercase px-2.5 py-1 rounded-lg border font-black ${
+                      profile.streak >= 30 
+                        ? 'bg-[#00FF00]/20 text-[#00FF00] border-[#00FF00]/40 shadow-[0_0_20px_rgba(0,255,0,0.3)]' 
+                        : 'bg-orange-500/20 text-orange-500 border-orange-500/30 shadow-[0_0_15px_rgba(249,115,22,0.2)]'
+                    }`}
+                  >
+                    <Flame className={`w-3.5 h-3.5 fill-current ${profile.streak >= 30 ? 'text-[#00FF00]' : 'text-orange-500'}`} />
+                    <span className="tracking-tighter">{profile.streak} DAY STREAK</span>
+                  </motion.div>
                 )}
               </div>
             </div>
@@ -183,6 +222,18 @@ export default function Dashboard({ profile }: Props) {
                 protein={todayMeals.reduce((a, m) => a + m.protein, 0)}
                 carbs={todayMeals.reduce((a, m) => a + m.carbs, 0)}
                 fat={todayMeals.reduce((a, m) => a + m.fat, 0)}
+              />
+
+              <WaterTracker 
+                waterLogs={waterLogs} 
+                target={profile.waterTarget || 2000} 
+                onAdd={handleAddWater} 
+              />
+
+              <StreakCelebration 
+                isOpen={showStreakModal} 
+                onClose={() => setShowStreakModal(false)} 
+                streak={profile.streak} 
               />
 
               {/* Weight Tracker Section - More visible on desktop */}

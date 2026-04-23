@@ -170,7 +170,11 @@ export default function ResultScreen() {
           </button>
 
           <button 
-            onClick={() => navigate('/share', { state: { meal } })}
+            onClick={() => {
+              const profileStr = localStorage.getItem('dietsnap_profile');
+              const profile = profileStr ? JSON.parse(profileStr) : null;
+              navigate('/share', { state: { meal, streak: profile?.streak || 0 } });
+            }}
             className="w-full bg-gray-900 border-2 border-gray-800 text-white font-black py-6 rounded-3xl flex items-center justify-center gap-4 hover:border-blue-500 transition-all text-xl uppercase italic tracking-tighter group"
           >
             <Share2 className="w-6 h-6 text-gray-500 group-hover:text-blue-500 transition-colors" />

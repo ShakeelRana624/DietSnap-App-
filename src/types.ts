@@ -13,6 +13,7 @@ export interface UserProfile {
   streak: number;
   lastGoalUpdate?: string;
   createdAt: string;
+  waterTarget?: number; // in ml
   notificationsEnabled?: boolean;
   reminderFrequency?: 'low' | 'medium' | 'high' | 'custom';
   reminderTimes?: {
@@ -39,6 +40,13 @@ export interface MealLog {
 export interface WeightLog {
   uid: string;
   weight: number;
+  timestamp: string;
+}
+
+export interface WaterLog {
+  id: string;
+  uid: string;
+  amount: number;
   timestamp: string;
 }
 

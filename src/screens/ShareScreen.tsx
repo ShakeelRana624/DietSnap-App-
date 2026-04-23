@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Share2, Instagram, Twitter, Home, Zap, Download, Loader2 } from 'lucide-react';
+import { Share2, Instagram, Twitter, Home, Zap, Download, Loader2, Flame } from 'lucide-react';
 import { MealLog } from '../types';
 import { toBlob } from 'html-to-image';
 import { useRef, useState } from 'react';
@@ -9,6 +9,7 @@ export default function ShareScreen() {
   const location = useLocation();
   const navigate = useNavigate();
   const meal: MealLog = location.state?.meal;
+  const streak: number = location.state?.streak || 0;
   const stickerRef = useRef<HTMLDivElement>(null);
   const [sharing, setSharing] = useState(false);
 
@@ -96,10 +97,23 @@ export default function ShareScreen() {
                   <p className="text-[7px] font-black uppercase tracking-[.4em] text-gray-500">AI Personal Coach</p>
                 </div>
               </div>
-              <div className="text-right">
-                <p className="text-[8px] font-black uppercase tracking-widest text-[#00FF00] bg-[#00FF00]/10 px-2 py-0.5 rounded-full border border-[#00FF00]/20">
-                  Live Scan ID: 0042
+              <div className="text-right flex flex-col items-end">
+                <p className="text-[8px] font-black uppercase tracking-widest text-[#00FF00] bg-[#00FF00]/10 px-2 py-0.5 rounded-full border border-[#00FF00]/20 mb-1">
+                  Live Scan ID: 00{Math.floor(Math.random() * 99)}
                 </p>
+                {streak > 0 && (
+                  <div className="flex flex-col items-end gap-1">
+                    <div className="flex items-center gap-1 bg-orange-500/10 px-2.5 py-1 rounded-full border border-orange-500/30">
+                      <Flame className="w-2.5 h-2.5 text-orange-500 fill-current" />
+                      <span className="text-[8px] font-black italic text-orange-500 uppercase tracking-tight">{streak} Day Streak</span>
+                    </div>
+                    {streak >= 7 && (
+                      <p className="text-[6px] font-black uppercase text-gray-600 tracking-widest pl-2">
+                        {streak >= 30 ? "Monthly Master" : "Weekly Warrior"}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 

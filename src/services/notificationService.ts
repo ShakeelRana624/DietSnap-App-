@@ -60,6 +60,11 @@ export const scheduleReminders = (profile: UserProfile, todayMeals: MealLog[]) =
     if (dinnerTrigger) {
       sendNotification("Dinner Check-in 🥗", "How was dinner? Log it now to finish your day strong.");
     }
+
+    // Streak Saver (9 PM)
+    if (hours === 21 && minutes === 0 && todayMeals.length === 0 && profile.streak > 0) {
+      sendNotification("Streak at Risk! 🔥", `Paji, your ${profile.streak} day streak is about to break! Log a meal now to save it.`);
+    }
     
     // Goal Check (10 PM - Stays at 10 PM for High intensity usually, but could be tied to dinner)
     if (hours === 22 && intensity === 'high') {

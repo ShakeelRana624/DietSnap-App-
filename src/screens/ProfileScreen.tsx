@@ -190,6 +190,37 @@ export default function ProfileScreen({ profile, onUpdate }: Props) {
                  </div>
                  <p className="text-4xl font-black italic text-[#00FF00]">{calculateGoal()} <span className="text-xs not-italic text-gray-500">kcal/day</span></p>
               </div>
+
+              {profile.streak > 0 && (
+                <div className="bg-orange-500/5 border border-orange-500/10 p-6 rounded-3xl space-y-4 overflow-hidden relative group">
+                  <div className="absolute top-0 right-0 p-4 opacity-[0.05] group-hover:scale-110 transition-transform">
+                    <Trophy className="w-24 h-24 text-orange-500" />
+                  </div>
+                  <div className="relative z-10">
+                    <div className="flex justify-between items-center mb-2">
+                       <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Current Achievement</p>
+                       <Shield className="w-4 h-4 text-orange-500" />
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-orange-500 rounded-2xl flex items-center justify-center shadow-[0_0_20px_rgba(249,115,22,0.3)]">
+                        <Flame className="w-7 h-7 text-black fill-current" />
+                      </div>
+                      <div>
+                        <p className="text-3xl font-black italic text-white leading-none">{profile.streak}</p>
+                        <p className="text-[10px] font-black uppercase text-orange-500 tracking-widest mt-1">Day Streak</p>
+                      </div>
+                    </div>
+                    <div className="mt-6 pt-4 border-t border-orange-500/10">
+                       <p className="text-[10px] font-bold text-gray-400">
+                          {profile.streak >= 365 ? "Legendary Level: 1 Year Unstoppable" :
+                           profile.streak >= 100 ? "Centurion Level: 100 Days Strong" :
+                           profile.streak >= 30 ? "Veteran Level: Monthly Master" :
+                           profile.streak >= 7 ? "Novice Level: Weekly Warrior" : "Keep going to unlock badges!"}
+                       </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Right Column: Detailed Forms */}
