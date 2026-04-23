@@ -13,6 +13,13 @@ export interface UserProfile {
   streak: number;
   lastGoalUpdate?: string;
   createdAt: string;
+  notificationsEnabled?: boolean;
+  reminderFrequency?: 'low' | 'medium' | 'high' | 'custom';
+  reminderTimes?: {
+    breakfast?: string; // HH:mm
+    lunch?: string;
+    dinner?: string;
+  };
 }
 
 export interface MealLog {
