@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { MealLog } from '../types';
 import { motion } from 'motion/react';
-import { Edit2, Save, ArrowLeft, Info } from 'lucide-react';
+import { Edit2, Save, ArrowLeft, Info, AlertCircle, Lightbulb } from 'lucide-react';
+import { logMeal } from '../lib/firebase';
 
 export default function ResultScreen() {
   const location = useLocation();
   const navigate = useNavigate();
   const [meal, setMeal] = useState<MealLog>(location.state?.meal);
+  const [insight, setInsight] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -16,24 +18,24 @@ export default function ResultScreen() {
     return null;
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setLoading(true);
     try {
-      const savedMeals = localStorage.getItem('dietsnap_meals');
-      const meals = savedMeals ? JSON.parse(savedMeals) : [];
+      const profileStr = localStorage.getItem('dietsnap_profile');
+      const profile = profileStr ? JSON.parse(profileStr) : null;
       
+      if (!profile) throw new Error("No profile found");
+
       const mealToSave = {
         ...meal,
-        id: Math.random().toString(36).substr(2, 9),
-        uid: 'local-user',
+        uid: profile.uid,
       };
       
-      meals.unshift(mealToSave);
-      localStorage.setItem('dietsnap_meals', JSON.stringify(meals));
-      
+      await logMeal(mealToSave);
       navigate('/share', { state: { meal: mealToSave } });
     } catch (err) {
       console.error(err);
+      alert("Failed to sync meal to cloud.");
     } finally {
       setLoading(false);
     }
@@ -100,20 +102,32 @@ export default function ResultScreen() {
           </div>
         </div>
 
-        {/* Grade Info */}
-        <div className="bg-gray-900/50 border border-gray-800 p-6 rounded-3xl flex gap-4 items-start">
-          <div className="p-3 bg-[#00FF00]/10 rounded-2xl">
-            <Info className="w-6 h-6 text-[#00FF00]" />
+        {/* Smart insight banner */}
+        {meal.grade === 'D' || meal.grade === 'F' ? (
+          <div className="bg-red-500/10 border border-red-500/20 p-6 rounded-3xl flex gap-4 items-start">
+            <div className="p-3 bg-red-500/10 rounded-2xl">
+              <AlertCircle className="w-6 h-6 text-red-500" />
+            </div>
+            <div>
+              <h4 className="font-black italic uppercase text-sm text-red-500">Heads Up!</h4>
+              <p className="text-sm text-gray-400 font-medium">
+                This meal is high in calories relative to its nutrients. Consider a smaller portion or pairing with fiber.
+              </p>
+            </div>
           </div>
-          <div>
-            <h4 className="font-black italic uppercase text-sm">Health Grade: {meal.grade}</h4>
-            <p className="text-sm text-gray-400 font-medium">
-              {meal.grade === 'A' ? "Superfood! High nutrient density and perfect macros." : 
-               meal.grade === 'B' ? "Great choice! Balanced and healthy." :
-               "Decent, but watch your portions for the rest of the day."}
-            </p>
+        ) : (
+          <div className="bg-[#00FF00]/10 border border-[#00FF00]/20 p-6 rounded-3xl flex gap-4 items-start">
+            <div className="p-3 bg-[#00FF00]/10 rounded-2xl">
+              <Lightbulb className="w-6 h-6 text-[#00FF00]" />
+            </div>
+            <div>
+              <h4 className="font-black italic uppercase text-sm text-[#00FF00]">DietSnap Tip</h4>
+              <p className="text-sm text-gray-400 font-medium">
+                {meal.protein > 20 ? "Solid protein source! This will help with muscle recovery." : "Consider adding a protein side to reach your daily goal faster."}
+              </p>
+            </div>
           </div>
-        </div>
+        )}
       </motion.div>
 
       <div className="pt-8 space-y-4">

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { UserProfile } from './types';
+import { auth, getUserProfile } from './lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 // Screens
 import AuthScreen from './screens/AuthScreen';
@@ -9,17 +11,34 @@ import Scanner from './screens/Scanner';
 import ResultScreen from './screens/ResultScreen';
 import ShareScreen from './screens/ShareScreen';
 import Onboarding from './screens/Onboarding';
+import ProfileScreen from './screens/ProfileScreen';
+import ManualAddScreen from './screens/ManualAddScreen';
 
 export default function App() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const savedProfile = localStorage.getItem('dietsnap_profile');
-    if (savedProfile) {
-      setProfile(JSON.parse(savedProfile));
-    }
-    setLoading(false);
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        const savedProfile = localStorage.getItem('dietsnap_profile');
+        if (savedProfile) {
+          setProfile(JSON.parse(savedProfile));
+        } else {
+          const cloudProfile = await getUserProfile(user.uid);
+          if (cloudProfile) {
+            setProfile(cloudProfile);
+            localStorage.setItem('dietsnap_profile', JSON.stringify(cloudProfile));
+          }
+        }
+      } else {
+        setProfile(null);
+        localStorage.removeItem('dietsnap_profile');
+      }
+      setLoading(false);
+    });
+
+    return () => unsub();
   }, []);
 
   const handleSetProfile = (newProfile: UserProfile) => {
@@ -41,18 +60,17 @@ export default function App() {
         <Routes>
           <Route 
             path="/auth" 
-            element={profile ? <Navigate to="/" /> : <AuthScreen onComplete={() => {
-              // Just a landing page now, onboarding handles the rest
-            }} />} 
+            element={profile ? <Navigate to="/" /> : <AuthScreen onComplete={handleSetProfile} />} 
           />
           <Route 
             path="/onboarding" 
-            element={!profile ? <Onboarding onComplete={handleSetProfile} /> : <Navigate to="/" />} 
+            element={auth.currentUser ? <Onboarding onComplete={handleSetProfile} /> : <Navigate to="/auth" />} 
           />
           <Route 
             path="/" 
             element={
-              profile ? <Dashboard profile={profile} /> : <Navigate to="/auth" />
+              profile && profile.goal ? <Dashboard profile={profile} /> : 
+              auth.currentUser ? <Navigate to="/onboarding" /> : <Navigate to="/auth" />
             } 
           />
           <Route 
@@ -66,6 +84,14 @@ export default function App() {
           <Route 
             path="/share" 
             element={profile ? <ShareScreen /> : <Navigate to="/auth" />} 
+          />
+          <Route 
+            path="/profile" 
+            element={profile ? <ProfileScreen profile={profile} onUpdate={handleSetProfile} /> : <Navigate to="/auth" />} 
+          />
+          <Route 
+            path="/manual-add" 
+            element={profile ? <ManualAddScreen profile={profile} /> : <Navigate to="/auth" />} 
           />
         </Routes>
       </div>

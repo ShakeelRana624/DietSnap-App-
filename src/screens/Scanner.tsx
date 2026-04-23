@@ -1,24 +1,33 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Camera, Zap, Loader2, Info } from 'lucide-react';
-import { GoogleGenAI, Type } from '@google/genai';
-
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+import { X, Zap, Loader2, Barcode, Camera as CameraIcon } from 'lucide-react';
+import { Html5Qrcode } from 'html5-qrcode';
 
 export default function Scanner() {
   const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  
+  const [mode, setMode] = useState<'food' | 'barcode'>('food');
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPortionModal, setShowPortionModal] = useState(false);
   const [detectedData, setDetectedData] = useState<any>(null);
 
   useEffect(() => {
-    startCamera();
-    return () => stopCamera();
-  }, []);
+    if (mode === 'food') {
+      startCamera();
+    } else {
+      stopCamera();
+      startBarcodeScanner();
+    }
+    return () => {
+      stopCamera();
+      stopBarcodeScanner();
+    };
+  }, [mode]);
 
   const startCamera = async () => {
     try {
@@ -38,13 +47,85 @@ export default function Scanner() {
     if (videoRef.current?.srcObject) {
       const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
       tracks.forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+  };
+
+  const startBarcodeScanner = async () => {
+    try {
+      const scanner = new Html5Qrcode("barcode-region");
+      scannerRef.current = scanner;
+      await scanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 150 } },
+        onBarcodeSuccess,
+        () => {}
+      );
+    } catch (err) {
+      setError("Failed to start barcode scanner.");
+    }
+  };
+
+  const stopBarcodeScanner = async () => {
+    const scanner = scannerRef.current;
+    if (scanner) {
+      try {
+        // Safety check to ensure we only stop if actually running
+        // Using a try-catch for the stop call is the most reliable way 
+        // to handle html5-qrcode's state sensitivity
+        await scanner.stop();
+      } catch (err: any) {
+        // If it's already stopped or not running, we don't need to report it as an error
+        if (err?.toString().includes("scanner is not running") || 
+            err?.toString().includes("is not running")) {
+          console.log("Scanner already stopped or not running.");
+        } else {
+          console.error("Error stopping barcode scanner:", err);
+        }
+      } finally {
+        scannerRef.current = null;
+      }
+    }
+  };
+
+  const onBarcodeSuccess = async (decodedText: string) => {
+    setScanning(true);
+    await stopBarcodeScanner();
+    try {
+      const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${decodedText}.json`);
+      const data = await res.json();
+      
+      if (data.status === 1) {
+        const product = data.product;
+        const normalizedData = {
+          foodName: product.product_name || "Unknown Product",
+          grade: (product.nutriscore_grade || 'C').toUpperCase(),
+          portions: {
+            Medium: {
+              calories: Math.round(product.nutriments?.['energy-kcal_100g'] || 0),
+              protein: product.nutriments?.proteins_100g || 0,
+              carbs: product.nutriments?.carbohydrates_100g || 0,
+              fat: product.nutriments?.fat_100g || 0,
+            }
+          }
+        };
+        setDetectedData(normalizedData);
+        // Barcodes are usually specific portions, but for consistency we'll use 'Medium' as default (100g)
+        startAd('Medium', normalizedData);
+      } else {
+        setError("Product not found in database.");
+        setMode('food'); // Fallback to food scan
+      }
+    } catch (err) {
+      setError("Barcode lookup failed.");
+      setMode('food');
+    } finally {
+      setScanning(false);
     }
   };
 
   const captureAndAnalyze = async () => {
     if (!videoRef.current || !canvasRef.current) return;
-    
-    // Ensure video is ready
     if (videoRef.current.readyState < 2) {
       setError("Camera not ready. Please wait.");
       return;
@@ -56,7 +137,6 @@ export default function Scanner() {
     const canvas = canvasRef.current;
     const video = videoRef.current;
     
-    // Downscale for better performance and to avoid payload limits
     const MAX_DIM = 1024;
     let width = video.videoWidth;
     let height = video.videoHeight;
@@ -79,8 +159,6 @@ export default function Scanner() {
     if (!ctx) return;
     
     ctx.drawImage(video, 0, 0, width, height);
-    
-    // Use a slightly lower quality to reduce base64 string length
     const base64Image = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
 
     if (!base64Image) {
@@ -90,52 +168,23 @@ export default function Scanner() {
     }
 
     try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: [
-          {
-            parts: [
-              { text: "Analyze this food item. Identify the food and provide nutrition data for Small, Medium, and Large portions. Return JSON format with foodName, calories, protein, carbs, fat, and a health grade (A-F) based on nutritional density. Focus on accuracy for the specific food shown." },
-              { inlineData: { data: base64Image, mimeType: 'image/jpeg' } }
-            ]
-          }
-        ],
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              foodName: { type: Type.STRING },
-              grade: { type: Type.STRING, description: "A, B, C, D, or F" },
-              portions: {
-                type: Type.OBJECT,
-                properties: {
-                  Small: { 
-                    type: Type.OBJECT, 
-                    properties: { calories: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, fat: { type: Type.NUMBER } } 
-                  },
-                  Medium: { 
-                    type: Type.OBJECT, 
-                    properties: { calories: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, fat: { type: Type.NUMBER } } 
-                  },
-                  Large: { 
-                    type: Type.OBJECT, 
-                    properties: { calories: { type: Type.NUMBER }, protein: { type: Type.NUMBER }, carbs: { type: Type.NUMBER }, fat: { type: Type.NUMBER } } 
-                  }
-                }
-              }
-            },
-            required: ["foodName", "grade", "portions"]
-          }
-        }
+      const response = await fetch('/api/analyze-food', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64Image })
       });
 
-      const result = JSON.parse(response.text || '{}');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Analysis failed");
+      }
+
+      const result = await response.json();
       setDetectedData(result);
       setShowPortionModal(true);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError("Analysis failed. Try again.");
+      setError(err.message || "Analysis failed. Try again.");
     } finally {
       setScanning(false);
     }
@@ -145,11 +194,12 @@ export default function Scanner() {
   const [adTimer, setAdTimer] = useState(15);
   const [selectedPortion, setSelectedPortion] = useState<string | null>(null);
 
-  const startAd = (portion: string) => {
+  const startAd = (portion: string, dataOverride?: any) => {
     setSelectedPortion(portion);
     setShowPortionModal(false);
     setShowAd(true);
     setAdTimer(15);
+    if (dataOverride) setDetectedData(dataOverride);
   };
 
   useEffect(() => {
@@ -177,7 +227,6 @@ export default function Scanner() {
 
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
-      {/* Ad Simulation Overlay */}
       <AnimatePresence>
         {showAd && (
           <motion.div 
@@ -220,18 +269,20 @@ export default function Scanner() {
         )}
       </AnimatePresence>
 
-      {/* Camera View */}
       <div className="relative flex-1 overflow-hidden">
-        <video 
-          ref={videoRef} 
-          autoPlay 
-          playsInline 
-          muted
-          className="absolute inset-0 w-full h-full object-cover"
-        />
+        {mode === 'food' ? (
+          <video 
+            ref={videoRef} 
+            autoPlay 
+            playsInline 
+            muted
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        ) : (
+          <div id="barcode-region" className="absolute inset-0 w-full h-full object-cover"></div>
+        )}
         <canvas ref={canvasRef} className="hidden" />
 
-        {/* Overlay UI */}
         <div className="absolute inset-0 border-[20px] sm:border-[40px] border-black/40 pointer-events-none">
           <div className="w-full h-full border-2 border-[#00FF00]/30 rounded-3xl relative">
             <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-[#00FF00] rounded-tl-xl"></div>
@@ -241,7 +292,6 @@ export default function Scanner() {
           </div>
         </div>
 
-        {/* Controls */}
         <div className="absolute top-6 left-6 right-6 flex justify-between items-center">
           <button 
             onClick={() => navigate('/')}
@@ -249,36 +299,80 @@ export default function Scanner() {
           >
             <X className="w-6 h-6" />
           </button>
-          <div className="bg-[#00FF00] text-black px-4 py-1 rounded-full font-black italic text-xs uppercase tracking-widest animate-pulse">
-            Live AI Scan
+          
+          <div className="flex bg-black/50 backdrop-blur-lg p-1 rounded-2xl border border-white/10">
+            <button 
+              onClick={() => setMode('food')}
+              className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition-all flex items-center gap-2 ${mode === 'food' ? 'bg-[#00FF00] text-black' : 'text-gray-400'}`}
+            >
+              <CameraIcon className="w-4 h-4" />
+              Food
+            </button>
+            <button 
+              onClick={() => setMode('barcode')}
+              className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition-all flex items-center gap-2 ${mode === 'barcode' ? 'bg-[#00FF00] text-black' : 'text-gray-400'}`}
+            >
+              <Barcode className="w-4 h-4" />
+              Barcode
+            </button>
           </div>
         </div>
 
         {error && (
-          <div className="absolute top-24 left-6 right-6 bg-red-500/20 border border-red-500 text-red-500 p-4 rounded-xl text-center font-bold">
+          <div className="absolute top-24 left-6 right-6 bg-red-500/20 border border-red-500 text-red-500 p-4 rounded-xl text-center font-bold z-10">
             {error}
           </div>
         )}
 
         <div className="absolute bottom-12 left-0 right-0 flex flex-col items-center gap-6">
-          <p className="text-white/70 font-bold uppercase tracking-widest text-xs">Point at food and tap scan</p>
-          <button 
-            onClick={captureAndAnalyze}
-            disabled={scanning}
-            className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(255,255,255,0.3)] active:scale-90 transition-all disabled:opacity-50"
-          >
-            {scanning ? (
-              <Loader2 className="w-12 h-12 text-black animate-spin" />
+          <AnimatePresence mode="wait">
+            {mode === 'food' ? (
+              <motion.div
+                key="food-controls"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 20 }}
+                className="flex flex-col items-center gap-6"
+              >
+                <p className="text-white/70 font-bold uppercase tracking-widest text-xs">Point at food and tap scan</p>
+                <button 
+                  onClick={captureAndAnalyze}
+                  disabled={scanning}
+                  className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(255,255,255,0.3)] active:scale-90 transition-all disabled:opacity-50"
+                >
+                  {scanning ? (
+                    <Loader2 className="w-12 h-12 text-black animate-spin" />
+                  ) : (
+                    <div className="w-20 h-20 border-4 border-black rounded-full flex items-center justify-center">
+                      <Zap className="w-10 h-10 text-black fill-current" />
+                    </div>
+                  )}
+                </button>
+              </motion.div>
             ) : (
-              <div className="w-20 h-20 border-4 border-black rounded-full flex items-center justify-center">
-                <Zap className="w-10 h-10 text-black fill-current" />
-              </div>
+              <motion.div
+                key="barcode-controls"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 20 }}
+                className="flex flex-col items-center gap-4"
+              >
+                <div className="p-4 bg-black/50 backdrop-blur-md rounded-2xl border border-[#00FF00]/30 flex flex-col items-center">
+                   <Barcode className="w-8 h-8 text-[#00FF00] mb-2 animate-pulse" />
+                   <p className="text-white font-black italic uppercase tracking-widest text-[10px]">Align barcode within frame</p>
+                </div>
+                {scanning && (
+                  <div className="flex items-center gap-3 bg-white text-black px-6 py-3 rounded-full font-black uppercase text-xs">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Identifying Product...
+                  </div>
+                )}
+              </motion.div>
             )}
-          </button>
+          </AnimatePresence>
         </div>
       </div>
 
-      {/* Portion Modal */}
       <AnimatePresence>
         {showPortionModal && (
           <motion.div 

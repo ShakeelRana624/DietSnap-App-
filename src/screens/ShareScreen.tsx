@@ -113,6 +113,11 @@ export default function ShareScreen() {
                 </div>
               </div>
             </div>
+
+            {/* Watermark */}
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 opacity-30">
+              <p className="text-[8px] font-black uppercase tracking-[0.5em] text-white">Made with DietSnap AI</p>
+            </div>
           </div>
         </motion.div>
       </div>

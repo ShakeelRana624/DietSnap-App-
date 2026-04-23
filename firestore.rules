@@ -1,38 +1,88 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper functions
-    function isAuthenticated() {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 3. Global Helpers
+    function isSignedIn() {
       return request.auth != null;
     }
+
     function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+      return isSignedIn() && request.auth.uid == userId;
     }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // 2. Validation Blueprints
     function isValidUser(data) {
-      return data.keys().hasAll(['uid', 'weight', 'height', 'goal']) &&
-             data.uid is string &&
-             data.weight is number &&
-             data.height is number &&
-             data.goal is number;
+      return data.keys().hasAll(['uid', 'email', 'weight', 'height', 'goal', 'createdAt'])
+        && data.keys().size() <= 20
+        && data.uid == request.auth.uid
+        && data.email is string
+        && data.weight is number
+        && data.height is number
+        && data.goal is number
+        && data.createdAt is string;
     }
+
     function isValidMeal(data) {
-      return data.keys().hasAll(['uid', 'foodName', 'calories', 'timestamp']) &&
-             data.uid is string &&
-             data.foodName is string &&
-             data.calories is number &&
-             data.timestamp is string;
+      return data.keys().hasAll(['uid', 'foodName', 'calories', 'protein', 'carbs', 'fat', 'portion', 'grade', 'timestamp'])
+        && data.keys().size() <= 11
+        && data.uid == request.auth.uid
+        && data.foodName is string && data.foodName.size() <= 200
+        && data.calories is number
+        && data.protein is number
+        && data.carbs is number
+        && data.fat is number
+        && data.portion in ['Small', 'Medium', 'Large', 'Custom']
+        && data.grade in ['A', 'B', 'C', 'D', 'F', 'Manual']
+        && data.timestamp is string;
     }
 
-    match /users/{userId} {
-      allow read: if isOwner(userId);
-      allow create: if isOwner(userId) && isValidUser(request.resource.data);
-      allow update: if isOwner(userId) && isValidUser(request.resource.data);
+    function isValidWeight(data) {
+      return data.keys().hasAll(['uid', 'weight', 'timestamp'])
+        && data.keys().size() == 3
+        && data.uid == request.auth.uid
+        && data.weight is number && data.weight > 0
+        && data.timestamp is string;
+    }
 
+    // 4. Match Blocks
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow create: if isOwner(userId) && isValidUser(incoming()) && isValidId(userId);
+      allow update: if isOwner(userId) && isValidUser(incoming()) && isValidId(userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt;
+      
       match /meals/{mealId} {
-        allow read: if isOwner(userId);
-        allow create: if isOwner(userId) && isValidMeal(request.resource.data);
-        allow update: if isOwner(userId) && isValidMeal(request.resource.data);
-        allow delete: if isOwner(userId);
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(mealId);
+        allow create: if isOwner(userId) && isValidMeal(incoming()) && isValidId(mealId);
+        allow update: if isOwner(userId) && isValidMeal(incoming()) && isValidId(mealId)
+          && incoming().uid == existing().uid
+          && incoming().timestamp == existing().timestamp;
+        allow delete: if isOwner(userId) && isValidId(mealId);
+      }
+
+      match /weights/{weightId} {
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidWeight(incoming()) && isValidId(weightId);
+        allow delete: if isOwner(userId) && isValidId(weightId);
       }
     }
   }

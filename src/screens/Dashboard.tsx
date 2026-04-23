@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
 import { UserProfile, MealLog } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Camera, TrendingUp, Utensils, Flame, Calendar, History, Target, ArrowRight } from 'lucide-react';
+import { Plus, Camera, TrendingUp, Utensils, Flame, Calendar, History, Target, ArrowRight, User, Sparkles, Trophy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { subscribeToMeals, saveUserProfile, subscribeToWeights, logWeight, updateStreak } from '../lib/firebase';
+import { WeightLog } from '../types';
+import WeightTracker from '../components/WeightTracker';
+import { Lightbulb, Info } from 'lucide-react';
 
 interface Props {
   profile: UserProfile;
@@ -10,38 +14,66 @@ interface Props {
 
 export default function Dashboard({ profile }: Props) {
   const [meals, setMeals] = useState<MealLog[]>([]);
+  const [weights, setWeights] = useState<WeightLog[]>([]);
   const [showGoalModal, setShowGoalModal] = useState(false);
-  const [newGoal, setNewGoal] = useState(profile.goal.toString());
+  const [showWeightModal, setShowWeightModal] = useState(false);
+  const [newWeight, setNewWeight] = useState(profile.weight?.toString() || '0');
+  const [newGoal, setNewGoal] = useState(profile.goal?.toString() || '2000');
   const [view, setView] = useState<'today' | 'history'>('today');
+  const [showAddMenu, setShowAddMenu] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const savedMeals = localStorage.getItem('dietsnap_meals');
-    if (savedMeals) {
-      setMeals(JSON.parse(savedMeals));
-    }
-  }, []);
+    const unsub = subscribeToMeals(profile.uid, (fetchedMeals) => {
+      setMeals(fetchedMeals);
+    });
+    const unsubWeights = subscribeToWeights(profile.uid, (fetchedWeights) => {
+      setWeights(fetchedWeights);
+    });
+    return () => { unsub(); unsubWeights(); };
+  }, [profile.uid]);
 
   useEffect(() => {
-    const checkNewDay = () => {
-      const today = new Date().toDateString();
-      const lastUpdate = profile.lastGoalUpdate ? new Date(profile.lastGoalUpdate).toDateString() : null;
-      
-      if (lastUpdate !== today) {
-        setShowGoalModal(true);
-      }
-    };
-    checkNewDay();
-  }, [profile.lastGoalUpdate]);
+    updateStreak(profile);
+    
+    // Check for new day
+    const today = new Date().toDateString();
+    const lastUpdate = profile.lastGoalUpdate ? new Date(profile.lastGoalUpdate).toDateString() : null;
+    if (lastUpdate && lastUpdate !== today) {
+      setShowGoalModal(true);
+    }
+  }, [profile.uid, profile.lastGoalUpdate]);
 
-  const handleUpdateGoal = () => {
+  const handleLogWeight = async () => {
+    const w = Number(newWeight);
+    if (isNaN(w) || w <= 0) return;
+    
+    try {
+      await logWeight({
+        uid: profile.uid,
+        weight: w,
+        timestamp: new Date().toISOString()
+      });
+      // Also update current profile weight
+      await saveUserProfile({ ...profile, weight: w });
+      setShowWeightModal(false);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+  const handleUpdateGoal = async () => {
     const updatedProfile = {
       ...profile,
       goal: Number(newGoal),
       lastGoalUpdate: new Date().toISOString()
     };
-    localStorage.setItem('dietsnap_profile', JSON.stringify(updatedProfile));
-    window.location.reload(); // Refresh to update profile in App state
+    try {
+      await saveUserProfile(updatedProfile);
+      localStorage.setItem('dietsnap_profile', JSON.stringify(updatedProfile));
+      window.location.reload(); 
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const todayMeals = meals.filter(m => {
@@ -66,24 +98,104 @@ export default function Dashboard({ profile }: Props) {
     <div className="min-h-screen bg-black pb-32 max-w-md mx-auto relative">
       {/* Header */}
       <div className="p-6 flex justify-between items-center bg-gray-900/50 backdrop-blur-xl border-b border-gray-800 sticky top-0 z-20 max-w-md mx-auto w-full left-0 right-0">
-        <div>
-          <h1 className="text-xl font-black italic">DIET<span className="text-[#00FF00]">SNAP</span></h1>
-          <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">
-            {view === 'today' ? 'Today' : 'History'}
-          </p>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-[#00FF00] rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(0,255,0,0.3)]">
+            <Sparkles className="w-6 h-6 text-black" />
+          </div>
+          <div>
+            <h1 className="text-xl font-black italic">DIET<span className="text-[#00FF00]">SNAP</span></h1>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-[#00FF00] font-black uppercase tracking-widest bg-[#00FF00]/10 px-2 rounded-full">Pro</span>
+              {profile.streak > 0 && (
+                <div className="flex items-center gap-1 text-orange-500 font-black text-[10px] uppercase">
+                  <Flame className="w-3 h-3 fill-current" />
+                  {profile.streak} Day Streak
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-        <div className="flex gap-2">
+        
+        <div className="flex gap-2 items-center">
           <button 
             onClick={() => setView(view === 'today' ? 'history' : 'today')}
-            className="p-2 bg-gray-800 rounded-lg hover:bg-[#00FF00]/20 hover:text-[#00FF00] transition-colors"
+            className="p-2.5 bg-gray-800 rounded-xl hover:bg-[#00FF00]/20 hover:text-[#00FF00] transition-colors border border-gray-700"
           >
             {view === 'today' ? <History className="w-5 h-5" /> : <Calendar className="w-5 h-5" />}
+          </button>
+          
+          <button 
+            onClick={() => navigate('/profile')}
+            className="w-11 h-11 rounded-xl bg-gray-800 border-2 border-gray-700 overflow-hidden flex items-center justify-center hover:border-[#00FF00] transition-all"
+          >
+            {profile.photoURL ? (
+              <img src={profile.photoURL} alt="User" className="w-full h-full object-cover" />
+            ) : (
+              <User className="w-5 h-5 text-gray-500" />
+            )}
           </button>
         </div>
       </div>
 
       {view === 'today' ? (
         <>
+          {/* Quick Stats Banner */}
+          <div className="px-6 pt-6">
+            <div className="bg-gray-900 border border-gray-800 p-4 rounded-2xl flex justify-between items-center bg-gradient-to-r from-gray-900 to-gray-800">
+               <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-500/10 rounded-lg">
+                    <Trophy className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Target Mode</p>
+                    <p className="text-sm font-black italic uppercase text-white">
+                      {profile.goalType === 'lose' ? 'Weight Loss 🔥' : profile.goalType === 'gain' ? 'Muscle Gain 💪' : 'Maintenance ⚖️'}
+                    </p>
+                  </div>
+               </div>
+               <div className="text-right">
+                  <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Goal</p>
+                  <p className="text-lg font-black italic text-[#00FF00]">{profile.goal} <span className="text-[10px] not-italic">kcal</span></p>
+               </div>
+            </div>
+          </div>
+          {/* Reminder Nudge */}
+          {todayMeals.length === 0 && (
+            <div className="px-6 pt-6">
+              <motion.div 
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-[#00FF00]/10 border border-[#00FF00]/30 p-4 rounded-2xl flex items-center gap-3"
+              >
+                <div className="p-2 bg-[#00FF00] rounded-lg">
+                  <Utensils className="w-5 h-5 text-black" />
+                </div>
+                <div>
+                  <p className="text-sm font-black italic uppercase">Bhai, lunch scan kiy?</p>
+                  <p className="text-[10px] text-[#00FF00] font-bold uppercase tracking-wider">Start tracking to reach your goal!</p>
+                </div>
+              </motion.div>
+            </div>
+          )}
+
+          {/* Smart Insights */}
+          <div className="px-6 mb-8 mt-4">
+             <div className="bg-[#00FF00]/5 border border-[#00FF00]/10 p-5 rounded-3xl space-y-3">
+                <div className="flex items-center gap-2">
+                   <Lightbulb className="w-4 h-4 text-[#00FF00]" />
+                   <h4 className="text-[10px] font-black uppercase text-[#00FF00] tracking-widest">AI Insights</h4>
+                </div>
+                <p className="text-gray-400 text-xs font-medium leading-relaxed">
+                   {consumedCalories > profile.goal ? 
+                     "You've exceeded your daily limit. Try focusing on high-volume, low-kcal foods like veggies for the rest of today." : 
+                     todayMeals.reduce((a, m) => a + m.protein, 0) < 50 ? 
+                     "Protein is looking a bit low. Adding some chicken or beans to your next meal would be a great move!" :
+                     "You're on the right track! Balance is key. Keep logging those meals."
+                   }
+                </p>
+             </div>
+          </div>
+
           {/* Progress Card */}
           <div className="p-6">
             <motion.div 
@@ -131,6 +243,10 @@ export default function Dashboard({ profile }: Props) {
                 <p className={`text-lg font-black italic ${stat.color}`}>{Math.round(stat.val)}g</p>
               </div>
             ))}
+          </div>
+          
+          <div className="px-6 mb-8">
+            <WeightTracker weights={weights} />
           </div>
 
           {/* Recent Meals */}
@@ -250,13 +366,100 @@ export default function Dashboard({ profile }: Props) {
         )}
       </AnimatePresence>
 
-      {/* FAB */}
-      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-30">
-        <button 
-          onClick={() => navigate('/scan')}
-          className="bg-[#00FF00] text-black w-20 h-20 rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(0,255,0,0.4)] hover:scale-110 active:scale-95 transition-all group"
+      {/* Weight Log Modal */}
+      <AnimatePresence>
+        {showWeightModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[60] flex items-center justify-center p-6"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="w-full max-w-md bg-gray-900 border-2 border-blue-500 rounded-[40px] p-8 space-y-8"
+            >
+              <div className="flex justify-between items-start">
+                <div className="space-y-1">
+                  <h2 className="text-2xl font-black italic uppercase">Update Weight</h2>
+                  <p className="text-gray-400 font-bold text-xs">Tracking daily helps you stay on course!</p>
+                </div>
+                <button onClick={() => setShowWeightModal(false)} className="text-gray-500 hover:text-white">✕</button>
+              </div>
+
+              <div className="relative">
+                <TrendingUp className="absolute left-6 top-1/2 -translate-y-1/2 text-blue-500 w-8 h-8" />
+                <input
+                  type="number"
+                  step="0.1"
+                  value={newWeight}
+                  onChange={(e) => setNewWeight(e.target.value)}
+                  className="w-full bg-gray-800 border-2 border-gray-700 rounded-3xl py-8 pl-18 pr-6 text-4xl font-black italic focus:border-blue-500 outline-none transition-all"
+                />
+                <span className="absolute right-6 top-1/2 -translate-y-1/2 text-sm font-black text-gray-500">KG</span>
+              </div>
+
+              <button
+                onClick={handleLogWeight}
+                className="w-full bg-blue-500 text-white font-black py-6 rounded-2xl flex items-center justify-center gap-2 hover:shadow-[0_0_30px_rgba(59,130,246,0.4)] transition-all active:scale-95"
+              >
+                Log New Weight
+                <ArrowRight className="w-5 h-5" />
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Action Button with Menu */}
+      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50">
+        <AnimatePresence>
+          {showAddMenu && (
+            <motion.div
+              initial={{ opacity: 0, y: 10, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.9 }}
+              className="absolute bottom-24 left-1/2 -translate-x-1/2 space-y-4"
+            >
+              <button
+                onClick={() => { navigate('/manual-add'); setShowAddMenu(false); }}
+                className="flex items-center gap-3 bg-gray-900 border border-gray-800 p-4 rounded-2xl shadow-xl hover:border-[#00FF00] group transition-all w-[180px]"
+              >
+                <div className="p-2 bg-[#00FF00]/10 rounded-lg group-hover:bg-[#00FF00]/20">
+                  <Plus className="w-5 h-5 text-[#00FF00]" />
+                </div>
+                <span className="text-xs font-black uppercase text-white tracking-widest">Manual Log</span>
+              </button>
+
+              <button
+                onClick={() => { navigate('/scan'); setShowAddMenu(false); }}
+                className="flex items-center gap-3 bg-gray-900 border border-gray-800 p-4 rounded-2xl shadow-xl hover:border-[#00FF00] group transition-all w-[180px]"
+              >
+                <div className="p-2 bg-[#00FF00]/10 rounded-lg group-hover:bg-[#00FF00]/20">
+                  <Camera className="w-5 h-5 text-[#00FF00]" />
+                </div>
+                <span className="text-xs font-black uppercase text-white tracking-widest">AI Scan</span>
+              </button>
+
+              <button
+                onClick={() => { setShowWeightModal(true); setShowAddMenu(false); }}
+                className="flex items-center gap-3 bg-gray-900 border border-gray-800 p-4 rounded-2xl shadow-xl hover:border-blue-500 group transition-all w-[180px]"
+              >
+                <div className="p-2 bg-blue-500/10 rounded-lg group-hover:bg-blue-500/20">
+                  <TrendingUp className="w-5 h-5 text-blue-400" />
+                </div>
+                <span className="text-xs font-black uppercase text-white tracking-widest">Log Weight</span>
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <button
+          onClick={() => setShowAddMenu(!showAddMenu)}
+          className={`w-20 h-20 rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(0,255,0,0.4)] transition-all active:scale-90 ${showAddMenu ? 'bg-white text-black rotate-45' : 'bg-[#00FF00] text-black'}`}
         >
-          <Camera className="w-10 h-10 group-hover:rotate-12 transition-transform" />
+          <Plus className="w-10 h-10" />
         </button>
       </div>
     </div>
